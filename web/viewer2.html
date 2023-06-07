@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Realsense Camera ROS2 - RGB - Viewer</title>
+    <meta http-equiv="content-type" content="text/html; charset=utf-8">
+
+    <script script type="text/javascript" src="three.min.js"></script>
+    <script script type="text/javascript" src="roslib.min.js"></script>
+    <script script type="text/javascript" src="ros3d.min.js"></script>
+    <script script type="text/javascript" src="FileSaver.min.js"></script>
+    
+    
+</head>
+
+<body>
+    <h1>Realsense Camera ROS2 - RGB - Viewer</h1>
+    <p>Connection: <span id="status" style="font-weight: bold;">N/A</span></p>
+    <p>camera status: <span id="cam_status" style="font-weight: bold;">N/A</span></p>
+    <h2 id="topic"></h2>
+
+    <section>
+  		<button onclick="downloadFile()">Download File</button>
+    	<a href="/download" download id="download-link" style="display: none;">Download Link</a>
+    	<a href="/remote_ip" id="ip">ip</a>
+    </section>
+
+
+    <script>
+      function downloadFile() {
+        var downloadLink = document.getElementById("download-link");
+      	downloadLink.addEventListener("click", function(event) {
+        	event.preventDefault();
+        	fetch('/download')
+          		.then(response => response.blob())
+          		.then(blob => {
+            	// save the file using FileSaver.js
+            	let timestamp = new Date().getTime();
+            	let fileName = `db_${timestamp}.db`;
+            	saveAs(blob, fileName);
+          	});
+      	});
+        downloadLink.click();
+      }
+    </script>
+
+    
+
+
+    <section>
+        <button id="sendMessageButton" style="font-size: 1.8em;" onclick="sendMessage()">Live PointCloud</button>
+        <button id="play-btn" style="font-size: 1.8em;">Show Image</button>
+        <button id="capture-btn" style="font-size: 1.8em;" onclick="sendMessage()">Capture RGB-D</button>
+        <button id="PCL-btn" style="font-size: 1.8em;" disabled>Capture PCL</button>
+        <button id="Close" style="font-size: 1.8em;">Close Realsense</button>
+        <!-- <button id="Open" style="font-size: 1.8em;">Open Realsense</button> -->
+        <button id="Record" style="font-size: 1.8em;" disabled>Record</button>
+        <button id="SRecord" style="font-size: 1.8em;" disabled>Stop Record</button>
+    </section>
+
+    <hr />
+    <div style="display: flex; justify-content: space-between;">
+        <video id="remote-video" muted="true" preload="none" style="width: 50%;"></video>
+        <video id="remote-video1" muted="true" preload="none" style="width: 50%;"></video>
+    </div>
+    
+    <script src="adapter.js"></script>
+    <script src="webrtc_ros.js"></script>
+    <script src="viewer.js"></script>
+    
+    <script>
+    	sendMessage();
+	
+        const playBtn = document.getElementById("play-btn");
+        const videoEl = document.getElementById("remote-video");
+        const videoEl1 = document.getElementById("remote-video1");
+        playBtn.addEventListener("click", () => {
+            if (videoEl.paused) {
+                videoEl.setAttribute("autoplay", true);
+                videoEl.setAttribute("muted", true);
+                videoEl.play();
+                videoEl.style.display = "block";
+                playBtn.textContent = "Close Image";
+                console.log('Camera Opened');
+            } else {
+                videoEl.removeAttribute("autoplay");
+                videoEl.removeAttribute("muted");
+                videoEl.pause();
+                videoEl.style.display = "none";
+                playBtn.textContent = "Show Image";
+                console.log('Camera Closed');
+            }
+            if (videoEl1.paused) {
+                videoEl1.setAttribute("autoplay", true);
+                videoEl1.setAttribute("muted", true);
+                videoEl1.play();
+                videoEl1.style.display = "block";
+                playBtn.textContent = "Close Image";
+                console.log('Camera Opened');
+            } else {
+                videoEl1.removeAttribute("autoplay");
+                videoEl1.removeAttribute("muted");
+                videoEl1.pause();
+                videoEl1.style.display = "none";
+                playBtn.textContent = "Show Image";
+                console.log('Camera Closed');
+            }
+        });
+        
+        
+        function init(){
+        
+        	const ros = new ROSLIB.Ros({ url: 'ws://' + window.location.hostname + ':9090' });
+        	ros.on('connection', () => {
+                document.getElementById("status").innerHTML = "successful";
+            });
+
+            // When the Rosbridge server experiences an error, fill the “status" span with the returned error
+            ros.on('error', (error) => {
+                document.getElementById("status").innerHTML = `errored out (${error})`;
+            });
+
+            // When the Rosbridge server shuts down, fill the “status" span with “closed"
+            ros.on('close', () => {
+                document.getElementById("status").innerHTML = "closed";
+            });
+            
+            // Create a service client to call the ROS2 launch service:
+            var launchClient1 = new ROSLIB.Service({
+                ros: ros,
+                name: '/launch',
+                serviceType: 'pointcloud_server/srv/LaunchCommands'
+            });
+            //Create a function to call the launch1 service and pass the launch command as a string
+
+            function launchCommand1() {
+                var request = new ROSLIB.ServiceRequest({
+                	command: "ros2 launch realsense2_camera rs_launch.py &"
+                });
+                launchClient1.callService(request, function (result) {
+                    console.log('Result: ' + result.success);
+                    if (result.success) {
+                        document.getElementById("cam_status").innerHTML = "Connected"
+                    }
+                 });
+            };
+            
+            // Create a service client to call the ROS2 launch service:
+            var launchClient2 = new ROSLIB.Service({
+                ros: ros,
+                name: '/launch',
+                serviceType: 'pointcloud_server/srv/LaunchCommands'
+            });
+            //Create a function to call the launch1 service and pass the launch command as a string
+
+            function launchCommand2() {
+                var request = new ROSLIB.ServiceRequest({
+                	command: "killall realsense2_camera_node &"
+                });
+                launchClient2.callService(request, function (result) {
+                    console.log('Result: ' + result.success);
+                    if (result.success) {
+                        document.getElementById("cam_status").innerHTML = "Disconnected"
+                    }
+                 });
+            };
+            
+            // Create a service client to call the ROS2 launch service:
+            var launchClient3 = new ROSLIB.Service({
+                ros: ros,
+                name: '/launch',
+                serviceType: 'pointcloud_server/srv/LaunchCommands'
+            });
+            //Create a function to call the launch1 service and pass the launch command as a string
+
+            function launchCommand3() {
+                var request = new ROSLIB.ServiceRequest({
+                	command: "ros2 launch rtabmap_ros  realsense_d400.launch.py  &"
+                });
+                launchClient3.callService(request, function (result) {
+                    console.log('Result: ' + result.success);
+                 });
+            };
+            
+            // Create a service client to call the ROS2 launch service:
+            var launchClient4 = new ROSLIB.Service({
+                ros: ros,
+                name: '/launch',
+                serviceType: 'pointcloud_server/srv/LaunchCommands'
+            });
+            //Create a function to call the launch1 service and pass the launch command as a string
+
+            function launchCommand4() {
+                var request = new ROSLIB.ServiceRequest({
+                	command: "killall rtabmap &"
+                });
+                launchClient4.callService(request, function (result) {
+                    console.log('Result: ' + result.success);
+                 });
+            };
+        	
+        }
+
+        function sendMessage() {
+
+            window.runSendMessage && window.runSendMessage("ros2 launch rosbridge_server rosbridge_websocket_launch.xml");
+
+            setTimeout(function () {
+                try {
+
+                    const ros = new ROSLIB.Ros({ url: 'ws://' + window.location.hostname + ':9090' });
+                    const captureBtn = document.getElementById('capture-btn');
+                    const PCLBtn = document.getElementById('PCL-btn');
+                    const CloseBtn = document.getElementById('Close');
+                    // const OpenBtn = document.getElementById('Open');
+                    // const ros = new ROSLIB.Ros({url: 'ws://'+ window.location.hostname+ ':9090' });
+                    // When the Rosbridge server connects, fill the span with id “status" with “successful"
+                    ros.on('connection', () => {
+                        document.getElementById("status").innerHTML = "successful";
+                    });
+
+                    // When the Rosbridge server experiences an error, fill the “status" span with the returned error
+                    ros.on('error', (error) => {
+                        document.getElementById("status").innerHTML = `errored out (${error})`;
+                    });
+
+                    // When the Rosbridge server shuts down, fill the “status" span with “closed"
+                    ros.on('close', () => {
+                        document.getElementById("status").innerHTML = "closed";
+                    });
+                    
+                    
+                    //var pointclod = new ROSLIB.Topic({
+                   // 	ros: ros,
+                     //   name: '/cloud_map',
+                     //   serviceType: 'sensor_msgs/PointCloud2'
+                    //})
+                    //pointclod.subscribe((message) => {
+   
+                    //         console.log('Depth: ' + message);
+ 
+                   // });
+
+                    // Create a service client to call the ROS2 launch service:
+                   // var launchClient = new ROSLIB.Service({
+                   //     ros: ros,
+                   //     name: '/launch_stop',
+                   //     serviceType: 'pointcloud_server/srv/LaunchCommands'
+                   // });
+                    //Create a function to calOpenl the launch service and pass the launch command as a string
+
+                  //  function launchCommand() {
+                   //     var request = new ROSLIB.ServiceRequest({
+                   //         stop: "killall open_cam &"
+                    //    });
+                     //   launchClient.callService(request, function (result) {
+                      //      console.log('Result: ' + result.success);
+                       //     if (result.success) {
+                        //        document.getElementById("cam_status").innerHTML = "Not Connected"
+                        //    }
+
+                     //   });
+                  //  };
+
+                  //  CloseBtn.addEventListener("click", () => {
+
+                   //     launchCommand();
+
+                  //  });
+
+
+                    // // Create a service client to call the ROS2 launch service:
+                    // var launchClient1 = new ROSLIB.Service({
+                    //     ros: ros,
+                    //     name: '/launch',
+                    //     serviceType: 'pointcloud_server/srv/LaunchCommands'
+                    // });
+                    // //Create a function to call the launch1 service and pass the launch command as a string
+
+                    // function launchCommand1() {
+                    //     var request = new ROSLIB.ServiceRequest({
+                    //         command: "ros2 run pointcloud_server open_cam &"
+                    //     });
+                    //     launchClient1.callService(request, function (result) {
+                    //         console.log('Result: ' + result.success);
+                    //         if (result.success) {
+                    //             document.getElementById("cam_status").innerHTML = "Connected"
+                    //         }
+                    //     });
+                    // };
+
+                    // OpenBtn.addEventListener("click", () => {
+
+                    //     launchCommand1();
+
+                    // });
+
+                    // Create a service client to call the ROS2 launch service:
+                  //  var launchClient2 = new ROSLIB.Service({
+                   //     ros: ros,
+                   //     name: '/launch',
+                   //     serviceType: 'pointcloud_server/srv/LaunchCommands'
+                   // });
+                    //Create a function to call the launch1 service and pass the launch command as a string
+
+                   // function launchCommand2() {
+                   //     var request = new ROSLIB.ServiceRequest({
+                   //         command: "ros2 run pointcloud_server image_publisher &"
+                   //     });
+                   //     launchClient2.callService(request, function (result) {
+                   //         console.log('Result: ' + result.success);
+                  //      });
+                   // };
+
+                   // captureBtn.addEventListener("click", () => {
+
+                   //     launchCommand2();
+
+                  //  });
+
+
+                    //PCLBtn.addEventListener("click", () => {
+                        // Create a listener for /my_topic
+                   //     const pcl_listener = new ROSLIB.Topic({
+                    //        ros,
+                    //        name: "/point_cloud",
+                     //       messageType: "sensor_msgs/msg/PointCloud2"
+                     //   });
+                        // When we receive a message on /my_topic, add its data as a list item to the “messages" ul
+                     //   pcl_listener.subscribe((message) => {
+           //                 console.log('pcl: ' + message.data);
+                      //      pcl_listener.unsubscribe();
+                     //   });
+//                    });
+
+                    // captureBtn.addEventListener("click", () => {
+                    //     // Create a listener for /my_topic
+                    //     const rgb_listener = new ROSLIB.Topic({
+                    //         ros,
+                    //         name: "/image",
+                    //         messageType: "sensor_msgs/msg/Image"
+                    //     });
+
+                    //     // Create a listener for /my_topic
+                    //     const depth_listener = new ROSLIB.Topic({
+                    //         ros,
+                    //         name: "/depth",
+                    //         messageType: "sensor_msgs/msg/Image"
+                    //     });
+                    //     // When we receive a message on /my_topic, add its data as a list item to the “messages" ul
+                    //     rgb_listener.subscribe((message) => {
+                    //         console.log('RGB: ' + message.data);
+                    //         rgb_listener.unsubscribe();
+                    //     });
+
+                    //     // When we receive a message on /my_topic, add its data as a list item to the “messages" ul
+                    //     depth_listener.subscribe((message) => {
+                    //         console.log('Depth: ' + message.data);
+                    //         depth_listener.unsubscribe();
+                    //     });
+                    // });
+                } catch (err) {
+                    if (err instanceof ROSLIB.WebSocketClosedError) {
+                        console.error("Error: Websocket closed");
+                    } else {
+                        console.error("Error:", err)
+                    }
+                }
+            }, 1500);
+        };
+    </script>
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "./three.js/build/three.module.js",
+                "three/addons/": "./three.js/examples/jsm/"
+            }
+        }
+    </script>
+
+   <!-- <section id="pclVisualize" style="display: none;">
+        <script type="module">
+
+            import * as THREE from 'three';
+
+            import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+            import { PCDLoader } from 'three/addons/loaders/PCDLoader.js';
+            import { GUI } from 'three/addons/libs/lil-gui.module.min.js';
+
+            let camera, scene, renderer;
+
+            init();
+            render();
+
+            function init() {
+
+                renderer = new THREE.WebGLRenderer({ antialias: true });
+                renderer.setPixelRatio(window.devicePixelRatio);
+                renderer.setSize(window.innerWidth/2, window.innerHeight/2);
+                document.body.appendChild(renderer.domElement);
+
+                scene = new THREE.Scene();
+
+                camera = new THREE.PerspectiveCamera(30, window.innerWidth / window.innerHeight, 0.01, 40);
+                camera.position.set(0, 0, 1);
+                scene.add(camera);
+
+                const controls = new OrbitControls(camera, renderer.domElement);
+                controls.addEventListener('change', render); // use if there is no animation loop
+                controls.minDistance = 0.5;
+                controls.maxDistance = 10;
+
+                //scene.add( new THREE.AxesHelper( 1 ) );
+
+                const loader = new PCDLoader();
+                loader.load('./pcd/Zaghetto.pcd', function (points) {
+
+                    points.geometry.center();
+                    points.geometry.rotateX(Math.PI);
+                    points.name = 'Zaghetto.pcd';
+                    scene.add(points);
+
+                    //
+
+                    const gui = new GUI();
+
+                    gui.add(points.material, 'size', 0.001, 0.01).onChange(render);
+                    gui.addColor(points.material, 'color').onChange(render);
+                    gui.open();
+
+                    //
+
+                    render();
+
+                });
+
+                window.addEventListener('resize', onWindowResize);
+
+            }
+
+            function onWindowResize() {
+
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+
+                renderer.setSize(window.innerWidth/2, window.innerHeight/2);
+
+                render();
+
+            }
+
+            function render() {
+
+                renderer.render(scene, camera);
+
+            }
+
+        </script>
+    </section> -->
+   
+    <iframe id="my-iframe" src="http://10.42.0.99:8086/" width="100%" height="200"></iframe>
+
+
+    <iframe id="ip_iframe"src="http://10.42.0.1:8086/" width="100%" height="200"></iframe>
+    
+    <!--<script>
+		 
+		const iplink = document.getElementById('ip')
+		fetch(iplink.href)
+			.then(response => response.text())
+			.then(ipAddress => {
+				iplink.textContent = 'IP Address: ' + ipAddress;
+				});
+    </script>-->
+    
+</body>
+
+</html>
