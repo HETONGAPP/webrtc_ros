@@ -44,7 +44,7 @@ void RosVideoCapturer::imageCallback(
   int64_t system_time_us = rclcpp::Clock().now().nanoseconds() / 1000;
   cv::Rect roi;
   int out_width = 640;
-  int out_height = 480;
+  int out_height = 360;
   int64_t translated_camera_time_us;
   if (AdaptFrame(bgr.cols, bgr.rows, system_time_us, &out_width, &out_height,
                  &roi.width, &roi.height, &roi.x, &roi.y)) {
